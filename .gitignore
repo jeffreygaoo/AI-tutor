@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+data/
+.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
+.coverage
+tutor_*.json
