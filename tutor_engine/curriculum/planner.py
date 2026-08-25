@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from tutor_engine.curriculum.unlock import DependencyEngine
-from tutor_engine.graph import Concept, ConceptGraph
+from tutor_engine.graph import Concept, ConceptGraph, ExpansionPolicy
 from tutor_engine.learner import Learner
 
 
@@ -33,6 +33,11 @@ class CurriculumPlanner:
         self, allowed_concept_ids: set[str] | None = None
     ) -> ConceptSelection:
         candidates = self.dependencies.get_available_concepts()
+        candidates = tuple(
+            concept
+            for concept in candidates
+            if not ExpansionPolicy.is_expanded(self.graph, concept)
+        )
         if allowed_concept_ids is not None:
             candidates = tuple(
                 concept for concept in candidates if concept.id in allowed_concept_ids
@@ -40,7 +45,7 @@ class CurriculumPlanner:
         if not candidates:
             return ConceptSelection(
                 concept=None,
-                reason="No unlocked, unmastered concept is currently available.",
+                reason="当前没有已解锁且尚未掌握的可学习知识点。",
             )
 
         ranked = [(self._priority(concept), concept) for concept in candidates]
@@ -50,10 +55,10 @@ class CurriculumPlanner:
             key=lambda item: (-item[0]["priority"], item[1].depth, item[1].id),
         )
         reason = (
-            f"Selected {selected.name}: goal relevance={factors['goal_relevance']:.2f}, "
-            f"importance={factors['importance']:.2f}, prerequisite value="
-            f"{factors['prerequisite_value']:.2f}, weakness={factors['weakness']:.2f}, "
-            f"readiness={factors['readiness']:.2f}."
+            f"推荐学习“{selected.name}”：目标相关度={factors['goal_relevance']:.2f}，"
+            f"重要性={factors['importance']:.2f}，前置价值="
+            f"{factors['prerequisite_value']:.2f}，薄弱程度={factors['weakness']:.2f}，"
+            f"就绪度={factors['readiness']:.2f}。"
         )
         return ConceptSelection(
             concept=selected.id,

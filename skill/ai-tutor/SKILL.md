@@ -46,9 +46,14 @@ or manually patch the resulting learning state.
   [mastery-rules.md](references/mastery-rules.md) when interpreting confidence or
   mastery.
 - Local visual dashboard: run `ai-tutor dashboard` for the multi-Subject workspace,
-  or `ai-tutor dashboard SUBJECT` for a direct entry. It provides read-only
-  Apple-inspired Overview, Blueprint, Roadmap, Concepts, and History views. The
-  dashboard must consume `TutorService`; never edit persisted JSON from the UI.
+  or `ai-tutor dashboard SUBJECT` for a direct entry. It provides Apple-inspired
+  Overview, Blueprint, Roadmap, Concepts, and History views. The dashboard must
+  consume `TutorService`; never edit persisted JSON directly from the UI.
+- Reset or delete: use `reset-progress SUBJECT --confirm SUBJECT` to preserve the
+  graph, Blueprint, and expansions while resetting the selected learner. Use
+  `delete-subject SUBJECT --confirm SUBJECT` to remove the Subject and every
+  learner's associated data. Both operations require an exact Subject-id
+  confirmation and archive the affected files under `data/archive/`.
 - Detail request inside one landscape branch: read
   [graph-rules.md](references/graph-rules.md), then expand only that anchor's next
   useful neighborhood.

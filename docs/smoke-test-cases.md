@@ -57,8 +57,8 @@
 
 ## 自动执行
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest tests.test_smoke -v
+```bash
+python -m unittest tests.test_smoke -v
 ```
 
 ## SMK-004：中文名称 UTF-8 往返
@@ -76,3 +76,19 @@
 - CLI 创建响应中的名称为 `机器学习`。
 - 新进程查询结果中的名称仍为 `机器学习`。
 - JSON 文件中的名称也是 `机器学习`，不存在替换字符或 mojibake。
+
+## SMK-005：子主题下钻与动态 Roadmap
+
+1. 对 Roadmap 中的粗粒度主题提交带层级、前置依赖和必修标记的有限批次子节点。
+2. 查询知识图与 Roadmap。
+3. 掌握其中一个必修子节点，再次查询父主题和 Roadmap。
+
+预期：下钻不替换 Blueprint 或历史；子节点证据更新父主题聚合掌握度，并可能改变解锁与 Roadmap。
+
+## SMK-006：重置、删除与归档
+
+1. 使用错误确认值尝试重置，确认操作被拒绝。
+2. 使用精确 Subject ID 执行 `reset-progress`，确认课程结构保留、学习者进度清空且生成归档。
+3. 使用精确 Subject ID 执行 `delete-subject`。
+
+预期：两项操作均要求精确确认；重置只影响指定学习者；删除移除活动主题及关联资源；操作前数据保存在时间戳归档中。

@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from typing import Any, Mapping
 from uuid import uuid4
 
 from tutor_engine.curriculum import CurriculumPlanner, DependencyEngine
-from tutor_engine.blueprint import BlueprintValidationError, build_blueprint
-from tutor_engine.graph import Concept, ConceptGraph, Relation, expand_graph
-from tutor_engine.learner import Misconception
-from tutor_engine.mastery import MasteryEvaluator
+from tutor_engine.blueprint import BlueprintValidationError, SubjectBlueprint, build_blueprint
+from tutor_engine.graph import Concept, ConceptGraph, ExpansionPolicy, Relation, expand_graph
+from tutor_engine.learner import Learner, Misconception
+from tutor_engine.mastery import HierarchyMasteryEvaluator, MasteryEvaluator
 from tutor_engine.quiz import AnswerAssessment, Quiz, QuizAttempt, QuizEvaluator
 from tutor_engine.review import ReviewScheduler
 from tutor_engine.roadmap import RoadmapConfig, analyze_roadmap
@@ -43,7 +43,7 @@ class TutorService:
         )
         self.repository.save_graph(graph, overwrite=False)
         learner = self.repository.load_learner(subject_id, learner_id)
-        DependencyEngine(graph, learner).refresh()
+        self._refresh_learning_state(graph, learner)
         self.repository.save_learner(subject_id, learner)
         return {
             "subject": subject_id,
@@ -52,9 +52,51 @@ class TutorService:
             "root_concept": subject_id,
         }
 
+    def reset_subject_progress(
+        self,
+        subject_id: str,
+        learner_id: str = "default",
+        confirmation: str | None = None,
+    ) -> dict[str, Any]:
+        """Reset one learner while preserving the Subject graph and Blueprint."""
+        self._require_subject_confirmation(subject_id, confirmation)
+        graph = self.repository.load_graph(subject_id)
+        archived = self.repository.reset_learner_progress(subject_id, learner_id)
+        learner = Learner(learner_id)
+        self._refresh_learning_state(graph, learner)
+        self.repository.save_learner(subject_id, learner)
+        return {
+            "operation": "reset-progress",
+            "subject": subject_id,
+            "learner": learner_id,
+            "preserved": {
+                "graph": True,
+                "blueprint": self.repository.blueprint_exists(subject_id),
+                "expanded_concepts": True,
+            },
+            **archived,
+            "status": self.status(subject_id, learner_id),
+        }
+
+    def delete_subject(
+        self, subject_id: str, confirmation: str | None = None
+    ) -> dict[str, Any]:
+        """Remove a Subject and all learner data after exact-id confirmation."""
+        self._require_subject_confirmation(subject_id, confirmation)
+        graph = self.repository.load_graph(subject_id)
+        name = graph.get_concept(subject_id).name
+        archived = self.repository.delete_subject(subject_id)
+        return {
+            "operation": "delete-subject",
+            "subject": subject_id,
+            "name": name,
+            "deleted": True,
+            **archived,
+        }
+
     def status(self, subject_id: str, learner_id: str = "default") -> dict[str, Any]:
         graph, learner = self._load(subject_id, learner_id)
-        DependencyEngine(graph, learner).refresh()
+        self._refresh_learning_state(graph, learner)
         mastered = sum(
             learner.get_or_create_concept(item.id).status == "mastered"
             for item in graph.concepts
@@ -130,10 +172,13 @@ class TutorService:
         self, subject_id: str, learner_id: str = "default"
     ) -> dict[str, Any]:
         graph, learner = self._load(subject_id, learner_id)
-        DependencyEngine(graph, learner).refresh()
+        topic_progress = self._refresh_learning_state(graph, learner)
         states = [learner.get_or_create_concept(item.id) for item in graph.concepts]
+        learning_states = [
+            state for state in states if state.concept_id not in topic_progress
+        ]
         distribution = {
-            status: sum(state.status == status for state in states)
+            status: sum(state.status == status for state in learning_states)
             for status in ("locked", "available", "learning", "weak", "familiar", "mastered")
         }
         sessions = self.repository.list_learning_sessions(subject_id, learner_id)
@@ -147,7 +192,7 @@ class TutorService:
         ]
         unresolved = sum(
             not misconception.resolved
-            for state in states
+            for state in learning_states
             for misconception in state.misconceptions
         )
         due_count = len(ReviewScheduler().due_concepts(learner))
@@ -168,10 +213,11 @@ class TutorService:
             "subject": subject_id,
             "learner": learner_id,
             "concepts": len(states),
+            "teachable_concepts": len(learning_states),
             "mastered": mastered,
-            "progress": round(mastered / len(states), 6) if states else 0.0,
-            "average_mastery": round(sum(state.mastery.score for state in states) / len(states), 6) if states else 0.0,
-            "average_confidence": round(sum(state.mastery.confidence for state in states) / len(states), 6) if states else 0.0,
+            "progress": round(mastered / len(learning_states), 6) if learning_states else 0.0,
+            "average_mastery": round(sum(state.mastery.score for state in learning_states) / len(learning_states), 6) if learning_states else 0.0,
+            "average_confidence": round(sum(state.mastery.confidence for state in learning_states) / len(learning_states), 6) if learning_states else 0.0,
             "status_distribution": distribution,
             "attempts": sum(state.attempt_count for state in states),
             "quiz_attempt_records": len(attempts),
@@ -183,6 +229,9 @@ class TutorService:
             "mastered_per_completed_session": round(mastered / completed_sessions, 6) if completed_sessions else None,
             "active_session": learner.active_session_id,
             "last_activity": last_activity,
+            "topic_progress": {
+                key: value.to_dict() for key, value in topic_progress.items()
+            },
         }
 
     def doctor(
@@ -220,7 +269,7 @@ class TutorService:
         if self.repository.blueprint_exists(subject_id):
             raise StorageError(f"blueprint already exists: {subject_id}")
         expanded, blueprint = build_blueprint(graph, payload)
-        DependencyEngine(expanded, learner).refresh()
+        self._refresh_learning_state(expanded, learner)
         self.repository.save_graph(expanded)
         self.repository.save_blueprint(blueprint)
         self.repository.save_learner(subject_id, learner)
@@ -282,10 +331,29 @@ class TutorService:
         self, subject_id: str, learner_id: str = "default"
     ) -> dict[str, Any]:
         graph, learner = self._load(subject_id, learner_id)
-        DependencyEngine(graph, learner).refresh()
+        topic_progress = self._refresh_learning_state(graph, learner)
         blueprint = self.repository.load_blueprint(subject_id)
         concept_map = {concept.id: concept for concept in graph.concepts}
         roadmap_items = self._roadmap_items(graph, blueprint)
+        hierarchy_children = HierarchyMasteryEvaluator().children(graph)
+        parent_by_child = {
+            child_id: parent_id
+            for parent_id, child_ids in hierarchy_children.items()
+            for child_id in child_ids
+        }
+
+        def roadmap_topic(concept_id: str) -> str:
+            """Promote selected descendants to their outermost expanded topic."""
+            current = concept_id
+            visited = set()
+            while current not in visited:
+                visited.add(current)
+                parent = parent_by_child.get(current)
+                if parent not in topic_progress:
+                    break
+                current = parent
+            return current
+
         grouped: dict[int, list] = {}
         for item in roadmap_items:
             level = getattr(item, "topological_layer", None)
@@ -293,24 +361,57 @@ class TutorService:
                 level = max(0, item.stage - 1)
             grouped.setdefault(level, []).append(item)
         stages = []
-        stage_names = ("Foundation", "Core", "Application", "Advanced", "Integration")
+        stage_names = ("基础阶段", "核心阶段", "应用阶段", "进阶阶段", "综合阶段")
         current_assigned = False
+        rendered_topics: set[str] = set()
         for number, level in enumerate(sorted(grouped), start=1):
             concepts = []
             for backbone in grouped[level]:
-                state = learner.get_or_create_concept(backbone.concept_id)
-                concepts.append(
-                    {
-                        "id": backbone.concept_id,
-                        "name": concept_map[backbone.concept_id].name,
+                display_id = roadmap_topic(backbone.concept_id)
+                if display_id in rendered_topics:
+                    continue
+                if display_id in topic_progress:
+                    rendered_topics.add(display_id)
+                state = learner.get_or_create_concept(display_id)
+                concept_value = {
+                        "id": display_id,
+                        "name": concept_map[display_id].name,
                         "status": state.status,
                         "mastery": state.mastery.to_dict(),
                         "leverage_score": backbone.leverage_score,
                         "core_score": backbone.core_score,
                         "inclusion_type": backbone.inclusion_type,
                         "selection_reason": backbone.selection_reason,
+                        "node_type": concept_map[display_id].metadata.get(
+                            "node_type",
+                            "topic"
+                            if display_id in topic_progress
+                            else "teachable",
+                        ),
                     }
-                )
+                if display_id in topic_progress:
+                    concept_value["child_progress"] = topic_progress[
+                        display_id
+                    ].to_dict()
+                    concept_value["children"] = [
+                        {
+                            "id": child_id,
+                            "name": concept_map[child_id].name,
+                            "status": learner.get_or_create_concept(child_id).status,
+                            "mastery": learner.get_or_create_concept(
+                                child_id
+                            ).mastery.to_dict(),
+                            "required": concept_map[child_id].metadata.get(
+                                "required", True
+                            ),
+                        }
+                        for child_id in hierarchy_children.get(
+                            display_id, ()
+                        )
+                    ]
+                concepts.append(concept_value)
+            if not concepts:
+                continue
             if all(item["status"] == "mastered" for item in concepts):
                 status = "completed"
             elif not current_assigned:
@@ -328,6 +429,7 @@ class TutorService:
                     "concepts": concepts,
                 }
             )
+        self.repository.save_learner(subject_id, learner)
         return {
             "subject": subject_id,
             "goal_id": blueprint.scope.goal_id or f"goal_{subject_id}_primary",
@@ -363,9 +465,97 @@ class TutorService:
             ],
         }
 
+    def localize_subject(
+        self,
+        subject_id: str,
+        payload: Mapping[str, Any],
+        learner_id: str = "default",
+    ) -> dict[str, Any]:
+        """Update display text without changing graph identities or learning state."""
+        graph, _ = self._load(subject_id, learner_id)
+        blueprint = self.repository.load_blueprint(subject_id)
+
+        def text(value: Any, field_name: str) -> str:
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field_name} must be a non-empty string")
+            return value.strip()
+
+        concept_updates = payload.get("concepts", {})
+        section_updates = payload.get("sections", {})
+        direction_updates = payload.get("directions", {})
+        for value, field_name in (
+            (concept_updates, "concepts"),
+            (section_updates, "sections"),
+            (direction_updates, "directions"),
+        ):
+            if not isinstance(value, Mapping):
+                raise ValueError(f"{field_name} must be an object keyed by id")
+
+        concept_ids = {item.id for item in graph.concepts}
+        section_ids = {item.id for item in blueprint.landscape}
+        direction_ids = {item.id for item in blueprint.advanced_directions}
+        unknown = set(concept_updates) - concept_ids
+        if unknown:
+            raise ValueError(f"localization references unknown concepts: {sorted(unknown)}")
+        unknown = set(section_updates) - section_ids
+        if unknown:
+            raise ValueError(f"localization references unknown sections: {sorted(unknown)}")
+        unknown = set(direction_updates) - direction_ids
+        if unknown:
+            raise ValueError(f"localization references unknown directions: {sorted(unknown)}")
+
+        def localized(item: Any, updates: Mapping[str, Any], kind: str):
+            raw = updates.get(item.id)
+            if raw is None:
+                return item
+            if not isinstance(raw, Mapping):
+                raise ValueError(f"{kind}.{item.id} must be an object")
+            extra = set(raw) - {"name", "description"}
+            if extra:
+                raise ValueError(f"unsupported {kind}.{item.id} fields: {sorted(extra)}")
+            values = {
+                key: text(value, f"{kind}.{item.id}.{key}")
+                for key, value in raw.items()
+            }
+            return replace(item, **values)
+
+        localized_graph = ConceptGraph(
+            graph.subject_id,
+            concepts=(localized(item, concept_updates, "concepts") for item in graph.concepts),
+            relations=graph.relations,
+        )
+        scope_values = {}
+        for key in ("goal", "target_level", "orientation"):
+            if key in payload:
+                scope_values[key] = text(payload[key], key)
+        localized_blueprint = replace(
+            blueprint,
+            scope=replace(blueprint.scope, **scope_values),
+            landscape=tuple(
+                localized(item, section_updates, "sections")
+                for item in blueprint.landscape
+            ),
+            advanced_directions=tuple(
+                localized(item, direction_updates, "directions")
+                for item in blueprint.advanced_directions
+            ),
+            revision=blueprint.revision + 1,
+            updated_at=SubjectBlueprint.timestamp(),
+        )
+
+        self.repository.save_graph(localized_graph)
+        self.repository.save_blueprint(localized_blueprint, overwrite=True)
+        return {
+            "subject": subject_id,
+            "revision": localized_blueprint.revision,
+            "localized_concepts": len(concept_updates),
+            "localized_sections": len(section_updates),
+            "localized_directions": len(direction_updates),
+        }
+
     def graph_view(self, subject_id: str, learner_id: str = "default") -> dict[str, Any]:
         graph, learner = self._load(subject_id, learner_id)
-        DependencyEngine(graph, learner).refresh()
+        self._refresh_learning_state(graph, learner)
         self.repository.save_learner(subject_id, learner)
         return {
             "subject": subject_id,
@@ -385,7 +575,16 @@ class TutorService:
         graph, learner = self._load(subject_id, learner_id)
         selection = self._next_selection(graph, learner, subject_id)
         self.repository.save_learner(subject_id, learner)
-        return selection.to_dict()
+        value = selection.to_dict()
+        if selection.concept is not None and self.repository.blueprint_exists(subject_id):
+            decision = ExpansionPolicy().evaluate(
+                graph, graph.get_concept(selection.concept)
+            )
+            if decision is not None:
+                value["action"] = decision.action
+                value["expansion"] = decision.to_dict()
+                value["reason"] = decision.reason
+        return value
 
     def learn(
         self,
@@ -400,6 +599,18 @@ class TutorService:
         if concept_id is None:
             raise ValueError("no concept is currently available to learn")
         concept = graph.get_concept(concept_id)
+        if ExpansionPolicy.is_expanded(graph, concept) \
+                or concept.metadata.get("node_type") == "topic":
+            raise ValueError(
+                f"concept is an aggregate topic and cannot be learned directly: {concept_id}"
+            )
+        if self.repository.blueprint_exists(subject_id):
+            decision = ExpansionPolicy().evaluate(graph, concept)
+            if decision is not None:
+                raise ValueError(
+                    f"{decision.action}: {decision.reason} "
+                    f"请先执行 expand --anchor {concept.id}。"
+                )
         state = learner.get_or_create_concept(concept_id)
         if state.status == "mastered":
             raise ValueError(f"concept is already mastered: {concept_id}")
@@ -428,7 +639,7 @@ class TutorService:
         state = learner.get_or_create_concept(concept_id)
         if state.status == "mastered":
             ReviewScheduler().schedule_after_mastery(state)
-        DependencyEngine(graph, learner).refresh()
+        self._refresh_learning_state(graph, learner)
         self.repository.save_learner(subject_id, learner)
         self._record_event(
             subject_id,
@@ -490,7 +701,15 @@ class TutorService:
         learner_id: str = "default",
     ) -> dict[str, Any]:
         graph, learner = self._load(subject_id, learner_id)
-        concepts = [Concept.from_dict(item) for item in expansion.get("concepts", [])]
+        concepts = []
+        for item in expansion.get("concepts", []):
+            concept = Concept.from_dict(item)
+            if "node_type" not in concept.metadata:
+                concept = replace(
+                    concept,
+                    metadata={**dict(concept.metadata), "node_type": "teachable"},
+                )
+            concepts.append(concept)
         if self.repository.blueprint_exists(subject_id):
             scope = self.repository.load_blueprint(subject_id).scope
             for concept in concepts:
@@ -506,7 +725,27 @@ class TutorService:
                     )
         relations = [Relation.from_dict(item) for item in expansion.get("relations", [])]
         expanded = expand_graph(graph, anchor_concept_id, concepts, relations)
-        DependencyEngine(expanded, learner).refresh()
+        expanded_at = datetime.now(timezone.utc).isoformat()
+        expanded = ConceptGraph(
+            expanded.subject_id,
+            concepts=(
+                replace(
+                    item,
+                    metadata={
+                        **dict(item.metadata),
+                        "node_type": "topic",
+                        "expansion_status": "expanded",
+                        "expansion_child_count": len(concepts),
+                        "expanded_at": expanded_at,
+                    },
+                )
+                if item.id == anchor_concept_id
+                else item
+                for item in expanded.concepts
+            ),
+            relations=expanded.relations,
+        )
+        self._refresh_learning_state(expanded, learner)
         self.repository.save_graph(expanded)
         self.repository.save_learner(subject_id, learner)
         self._record_event(
@@ -521,6 +760,10 @@ class TutorService:
             "added_concepts": [item.id for item in concepts],
             "added_relations": [item.id for item in relations],
             "total_concepts": len(expanded.concepts),
+            "expansion_status": "expanded",
+            "roadmap": self.roadmap(subject_id, learner_id)
+            if self.repository.blueprint_exists(subject_id)
+            else None,
         }
 
     def register_quiz(
@@ -572,7 +815,7 @@ class TutorService:
                     )
                     state.misconceptions.append(item)
                     known[item.id] = item
-        DependencyEngine(graph, learner).refresh()
+        self._refresh_learning_state(graph, learner)
         attempt = QuizAttempt(
             id=f"attempt_{uuid4().hex}",
             quiz_id=quiz.id,
@@ -624,6 +867,15 @@ class TutorService:
             )
         return graph, learner
 
+    @staticmethod
+    def _require_subject_confirmation(
+        subject_id: str, confirmation: str | None
+    ) -> None:
+        if confirmation != subject_id:
+            raise ValueError(
+                f"confirmation must exactly match subject id: {subject_id}"
+            )
+
     def _next_selection(self, graph, learner, subject_id: str):
         planner = CurriculumPlanner(graph, learner)
         if not self.repository.blueprint_exists(subject_id):
@@ -647,7 +899,7 @@ class TutorService:
             if selection.concept is not None:
                 return selection
             break
-        return planner.next_concept()
+        return planner.next_concept(set().union(*by_stage.values()) if by_stage else set())
 
     @staticmethod
     def _roadmap_items(graph, blueprint):
@@ -671,3 +923,11 @@ class TutorService:
         )
         session.add_event(event_type, data)
         self.repository.save_learning_session(session)
+
+    @staticmethod
+    def _refresh_learning_state(graph, learner):
+        dependencies = DependencyEngine(graph, learner)
+        dependencies.refresh()
+        summaries = HierarchyMasteryEvaluator().update(graph, learner)
+        dependencies.refresh()
+        return summaries

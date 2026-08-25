@@ -11,3 +11,10 @@ data/
 .pytest_cache/
 .coverage
 tutor_*.json
+
+# Local model-generated learning payloads and localization drafts
+/*_blueprint.json
+/*_diagnostic_*.json
+/*_expansion.json
+/*_quiz_*.json
+/localizations/

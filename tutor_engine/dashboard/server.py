@@ -112,6 +112,32 @@ def _handler(repository: JsonRepository, default_subject: str | None, learner_id
             self.end_headers()
             self.wfile.write(content)
 
+        def do_POST(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            if parsed.path not in {
+                "/api/reset-progress",
+                "/api/delete-subject",
+            }:
+                self._json_response({"error": "unknown API endpoint"}, 404)
+                return
+            try:
+                value = self._json_body()
+                subject_id = value.get("subject")
+                confirmation = value.get("confirmation")
+                if not isinstance(subject_id, str):
+                    raise ValueError("subject must be a string")
+                service = TutorService(repository)
+                if parsed.path == "/api/reset-progress":
+                    result = service.reset_subject_progress(
+                        subject_id, learner_id, confirmation
+                    )
+                else:
+                    result = service.delete_subject(subject_id, confirmation)
+                result["catalog"] = build_subject_catalog(repository, learner_id)
+                self._json_response(result)
+            except (json.JSONDecodeError, KeyError, RuntimeError, ValueError) as exc:
+                self._json_response({"error": str(exc)}, 400)
+
         def _api_state(self, requested_subject: str | None) -> None:
             try:
                 if requested_subject is None:
@@ -124,6 +150,20 @@ def _handler(repository: JsonRepository, default_subject: str | None, learner_id
                 return
             except (KeyError, RuntimeError, ValueError) as exc:
                 self._json_response({"error": str(exc)}, 404)
+
+        def _json_body(self) -> dict[str, Any]:
+            if self.headers.get("X-AI-Tutor-Action") != "true":
+                raise ValueError("missing local action header")
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError as exc:
+                raise ValueError("invalid Content-Length") from exc
+            if length < 1 or length > 8192:
+                raise ValueError("request body must be between 1 and 8192 bytes")
+            value = json.loads(self.rfile.read(length).decode("utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("request body must be a JSON object")
+            return value
 
         def _json_response(self, value: Any, status: int = 200) -> None:
             payload = json.dumps(value, ensure_ascii=False).encode("utf-8")

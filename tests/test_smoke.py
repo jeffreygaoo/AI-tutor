@@ -113,7 +113,7 @@ class TutorSmokeTests(unittest.TestCase):
         self.expand_machine_learning()
         selected = self.cli("next", "machine_learning")
         self.assertEqual(selected["concept"], "probability")
-        self.assertIn("Selected Probability", selected["reason"])
+        self.assertIn("推荐学习“Probability”", selected["reason"])
         self.assertEqual(self.cli("doctor", "machine_learning")["status"], "ok")
 
     def test_smoke_004_cli_preserves_chinese_names(self) -> None:

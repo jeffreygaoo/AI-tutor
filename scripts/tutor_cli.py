@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=Path(os.environ.get("AI_TUTOR_DATA_DIR", PROJECT_ROOT / "data")),
+        default=Path(os.environ.get("AI_TUTOR_DATA_DIR", Path.cwd() / "data")),
     )
     parser.add_argument("--learner", default="default")
     parser.add_argument("--compact", action="store_true")
@@ -49,6 +49,14 @@ def build_parser() -> argparse.ArgumentParser:
     create = commands.add_parser("create")
     create.add_argument("subject")
     create.add_argument("--name", required=True)
+
+    reset_progress = commands.add_parser("reset-progress")
+    reset_progress.add_argument("subject")
+    reset_progress.add_argument("--confirm", required=True)
+
+    delete_subject = commands.add_parser("delete-subject")
+    delete_subject.add_argument("subject")
+    delete_subject.add_argument("--confirm", required=True)
 
     for command in ("status", "graph", "next", "review", "session-start", "session-end", "history", "progress", "doctor", "blueprint", "roadmap", "directions"):
         child = commands.add_parser(command)
@@ -74,6 +82,10 @@ def build_parser() -> argparse.ArgumentParser:
     blueprint_create = commands.add_parser("blueprint-create")
     blueprint_create.add_argument("subject")
     blueprint_create.add_argument("--input", required=True)
+
+    localize = commands.add_parser("localize")
+    localize.add_argument("subject")
+    localize.add_argument("--input", required=True)
 
     dashboard = commands.add_parser("dashboard")
     dashboard.add_argument("subject", nargs="?")
@@ -107,6 +119,12 @@ def run(argv: Sequence[str] | None = None) -> dict:
     service = TutorService(JsonRepository(args.data_dir))
     if args.command == "create":
         return service.create_subject(args.subject, args.name, args.learner)
+    if args.command == "reset-progress":
+        return service.reset_subject_progress(
+            args.subject, args.learner, args.confirm
+        )
+    if args.command == "delete-subject":
+        return service.delete_subject(args.subject, args.confirm)
     if args.command == "status":
         return service.status(args.subject, args.learner)
     if args.command == "graph":
@@ -135,6 +153,10 @@ def run(argv: Sequence[str] | None = None) -> dict:
         return service.directions(args.subject, args.learner)
     if args.command == "blueprint-create":
         return service.create_blueprint(
+            args.subject, read_json_object(args.input), args.learner
+        )
+    if args.command == "localize":
+        return service.localize_subject(
             args.subject, read_json_object(args.input), args.learner
         )
     if args.command == "expand":

@@ -34,6 +34,9 @@ class ProgressiveExpansionTests(unittest.TestCase):
         )
         self.assertEqual(result["total_concepts"], 3)
         self.assertEqual(len(self.repository.load_graph("ml").concepts), 3)
+        root = self.repository.load_graph("ml").get_concept("ml")
+        self.assertEqual(root.metadata["expansion_status"], "expanded")
+        self.assertEqual(root.metadata["expansion_child_count"], 2)
 
     def test_disconnected_expansion_rolls_back(self) -> None:
         with self.assertRaisesRegex(GraphValidationError, "connect to anchor"):

@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>AI Tutor · Learning Dashboard</title>
+  <title>AI Tutor · 学习看板</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/hierarchy.css">
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -13,21 +14,21 @@
     <div class="brand"><span class="brand-mark">T</span><span>AI Tutor</span></div>
     <nav id="nav" aria-label="主导航">
       <button class="nav-item active" data-view="overview"><span>⌂</span>概览</button>
-      <button class="nav-item" data-view="blueprint"><span>⌘</span>Blueprint</button>
-      <button class="nav-item" data-view="roadmap"><span>↗</span>Roadmap</button>
-      <button class="nav-item" data-view="concepts"><span>◫</span>Concepts</button>
+      <button class="nav-item" data-view="blueprint"><span>⌘</span>学科蓝图</button>
+      <button class="nav-item" data-view="roadmap"><span>↗</span>学习路线</button>
+      <button class="nav-item" data-view="concepts"><span>◫</span>知识点</button>
       <button class="nav-item" data-view="history"><span>◷</span>历史</button>
     </nav>
     <div class="sidebar-foot">
-      <span class="live-dot"></span><span>本地只读</span>
+      <span class="live-dot"></span><span>本地数据</span>
       <button id="themeToggle" class="icon-button" title="切换外观">◐</button>
     </div>
   </aside>
 
   <main>
     <header class="topbar">
-      <div><p class="eyebrow" id="eyebrow">PERSONAL LEARNING SYSTEM</p><h1 id="pageTitle">学习概览</h1></div>
-      <div class="top-actions"><label class="subject-picker"><span>Subject</span><select id="subjectSelect" aria-label="选择 Subject"></select></label><span id="updatedAt" class="updated"></span><button id="refresh" class="refresh-button">刷新数据</button></div>
+      <div><p class="eyebrow" id="eyebrow">个性化学习系统</p><h1 id="pageTitle">学习概览</h1></div>
+      <div class="top-actions"><label class="subject-picker"><span>学习主题</span><select id="subjectSelect" aria-label="选择学习主题"></select></label><span id="updatedAt" class="updated"></span><button id="manageSubject" class="manage-button">管理主题</button><button id="refresh" class="refresh-button">刷新数据</button></div>
     </header>
 
     <section id="loading" class="loading glass"><span class="spinner"></span><p>正在读取你的学习状态…</p></section>
@@ -35,50 +36,78 @@
 
     <div id="app" class="hidden">
       <section class="view active" data-view-panel="overview">
-        <div class="workspace-heading"><div><span class="eyebrow">MY LEARNING SPACE</span><h2>全部 Subject</h2></div><span id="subjectTotal" class="workspace-count"></span></div>
+        <div class="workspace-heading"><div><span class="eyebrow">我的学习空间</span><h2>全部学习主题</h2></div><span id="subjectTotal" class="workspace-count"></span></div>
         <div id="subjectCards" class="subject-grid"></div>
         <article class="hero glass">
-          <div class="hero-copy"><span class="pill">CURRENT GOAL</span><h2 id="goal"></h2><p id="goalMeta"></p><button class="primary-action" data-jump="roadmap">查看学习路径 <span>→</span></button></div>
+          <div class="hero-copy"><span class="pill">当前目标</span><h2 id="goal"></h2><p id="goalMeta"></p><button class="primary-action" data-jump="roadmap">查看学习路径 <span>→</span></button></div>
           <div class="progress-orbit" id="progressOrbit"><div><strong id="progressPercent">0%</strong><span>已掌握</span></div></div>
         </article>
         <div class="metric-grid">
-          <article class="metric-card glass"><span class="metric-label">知识全景</span><strong id="conceptCount">—</strong><small>Concepts</small></article>
-          <article class="metric-card glass"><span class="metric-label">核心路径</span><strong id="mvlgCount">—</strong><small>MVLG nodes</small></article>
-          <article class="metric-card glass"><span class="metric-label">待复习</span><strong id="reviewCount">—</strong><small>Due reviews</small></article>
-          <article class="metric-card glass"><span class="metric-label">测验记录</span><strong id="attemptCount">—</strong><small>Attempts</small></article>
+          <article class="metric-card glass"><span class="metric-label">知识全景</span><strong id="conceptCount">—</strong><small>知识点总数</small></article>
+          <article class="metric-card glass"><span class="metric-label">核心路径</span><strong id="mvlgCount">—</strong><small>核心节点数</small></article>
+          <article class="metric-card glass"><span class="metric-label">待复习</span><strong id="reviewCount">—</strong><small>到期复习数</small></article>
+          <article class="metric-card glass"><span class="metric-label">测验记录</span><strong id="attemptCount">—</strong><small>测验次数</small></article>
         </div>
         <div class="two-column">
-          <article class="next-card dark-card"><div><span class="pill light">UP NEXT</span><h3 id="nextName"></h3><p id="nextReason"></p></div><div class="priority" id="nextPriority"></div></article>
-          <article class="glass section-card"><div class="section-heading"><div><span class="eyebrow">MASTERY</span><h3>学习状态分布</h3></div></div><div id="distribution" class="distribution"></div></article>
+          <article class="next-card dark-card"><div><span class="pill light">下一步</span><h3 id="nextName"></h3><p id="nextReason"></p></div><div class="priority" id="nextPriority"></div></article>
+          <article class="glass section-card"><div class="section-heading"><div><span class="eyebrow">掌握情况</span><h3>学习状态分布</h3></div></div><div id="distribution" class="distribution"></div></article>
         </div>
       </section>
 
       <section class="view" data-view-panel="blueprint">
-        <article class="intro-card glass"><span class="pill">SUBJECT BLUEPRINT</span><h2>先看全局，再搭骨架</h2><p>完整领域提供认知地图，核心 MVLG 决定当前目标下最值得投入的学习骨架。</p></article>
+        <article class="intro-card glass"><span class="pill">学科蓝图</span><h2>先看全局，再搭骨架</h2><p>完整领域提供认知地图，核心学习图决定当前目标下最值得投入的学习骨架。</p></article>
         <div id="landscape" class="landscape-grid"></div>
-        <article class="glass section-card"><div class="section-heading"><div><span class="eyebrow">ADVANCEMENT</span><h3>可进阶方向</h3></div></div><div id="directions" class="direction-grid"></div></article>
+        <article class="glass section-card"><div class="section-heading"><div><span class="eyebrow">进阶方向</span><h3>可进阶方向</h3></div></div><div id="directions" class="direction-grid"></div></article>
       </section>
 
       <section class="view" data-view-panel="roadmap">
-        <article class="intro-card glass"><span class="pill">DYNAMIC MVLG</span><h2 id="roadmapTitle">你的个性化学习路径</h2><p>由 Goal、Knowledge Graph 与 Mastery 动态计算；同一层节点可以并行学习。</p></article>
+        <article class="intro-card glass"><span class="pill">动态核心学习图</span><h2 id="roadmapTitle">你的个性化学习路径</h2><p>由学习目标、知识图谱与掌握度动态计算；同一层节点可以并行学习。</p></article>
         <div class="legend"><span><i class="dot mastered"></i>已掌握</span><span><i class="dot learning"></i>学习中</span><span><i class="dot available"></i>可学习</span><span><i class="dot locked"></i>未解锁</span></div>
         <div id="roadmapStages" class="roadmap-stages"></div>
       </section>
 
       <section class="view" data-view-panel="concepts">
-        <article class="concept-toolbar glass"><div><span class="eyebrow">KNOWLEDGE GRAPH</span><h2>Concept 浏览器</h2></div><div class="filters"><input id="conceptSearch" type="search" placeholder="搜索 Concept"><select id="statusFilter"><option value="all">全部状态</option><option value="learning">学习中</option><option value="available">可学习</option><option value="familiar">熟悉</option><option value="mastered">已掌握</option><option value="locked">未解锁</option></select></div></article>
+        <article class="concept-toolbar glass"><div><span class="eyebrow">知识图谱</span><h2>知识点浏览器</h2></div><div class="filters"><input id="conceptSearch" type="search" placeholder="搜索知识点"><select id="statusFilter"><option value="all">全部状态</option><option value="learning">学习中</option><option value="available">可学习</option><option value="familiar">熟悉</option><option value="mastered">已掌握</option><option value="locked">未解锁</option></select></div></article>
         <div id="conceptList" class="concept-list"></div>
       </section>
 
       <section class="view" data-view-panel="history">
         <div class="two-column history-summary">
-          <article class="metric-card glass"><span class="metric-label">学习会话</span><strong id="sessionCount">—</strong><small>Sessions</small></article>
-          <article class="metric-card glass"><span class="metric-label">最近活动</span><strong id="lastActivity" class="date-value">—</strong><small>Last activity</small></article>
+          <article class="metric-card glass"><span class="metric-label">学习会话</span><strong id="sessionCount">—</strong><small>会话次数</small></article>
+          <article class="metric-card glass"><span class="metric-label">最近活动</span><strong id="lastActivity" class="date-value">—</strong><small>最后活动时间</small></article>
         </div>
-        <article class="glass section-card"><div class="section-heading"><div><span class="eyebrow">TIMELINE</span><h3>学习轨迹</h3></div></div><div id="timeline" class="timeline"></div></article>
+        <article class="glass section-card"><div class="section-heading"><div><span class="eyebrow">时间线</span><h3>学习轨迹</h3></div></div><div id="timeline" class="timeline"></div></article>
       </section>
     </div>
   </main>
+  <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
+  <aside id="conceptDrawer" class="concept-drawer" aria-hidden="true" aria-label="知识点详情">
+    <div class="drawer-actions">
+      <button id="drawerBack" class="drawer-icon hidden" aria-label="返回上一级">←</button>
+      <span id="drawerDepth" class="drawer-depth">知识点详情</span>
+      <button id="drawerClose" class="drawer-icon" aria-label="关闭">×</button>
+    </div>
+    <div id="drawerContent"></div>
+  </aside>
+  <dialog id="manageDialog" class="manage-dialog">
+    <div class="manage-header">
+      <div><span class="eyebrow">主题设置</span><h2 id="manageTitle">管理学习主题</h2></div>
+      <button id="manageClose" class="drawer-icon" aria-label="关闭主题管理">×</button>
+    </div>
+    <p>为防止误操作，请输入主题 ID：<strong id="manageSubjectId"></strong></p>
+    <input id="manageConfirmation" class="manage-confirmation" autocomplete="off" spellcheck="false" placeholder="输入主题 ID 以确认">
+    <p id="manageError" class="manage-error hidden"></p>
+    <div class="manage-actions">
+      <article class="manage-action">
+        <div><h3>重置学习进度</h3><p>保留知识图谱、蓝图和已展开知识点；清空当前学习者的掌握度、测验和学习历史。</p></div>
+        <button id="resetProgress" disabled>重置进度</button>
+      </article>
+      <article class="manage-action danger-zone">
+        <div><h3>删除学习主题</h3><p>从工作区移除该主题及所有学习者数据。原始文件会进入本地可恢复归档。</p></div>
+        <button id="deleteSubject" disabled>删除主题</button>
+      </article>
+    </div>
+  </dialog>
   <script src="/app.js"></script>
 </body>
 </html>

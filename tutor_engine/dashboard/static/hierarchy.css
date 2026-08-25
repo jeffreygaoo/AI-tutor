@@ -1,0 +1,262 @@
+.roadmap-node.topic-node {
+  grid-column: 1 / -1;
+}
+
+.topic-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.roadmap-node[data-concept],
+.concept-card[data-concept],
+.topic-children [data-drill] {
+  cursor: pointer;
+}
+
+.topic-children button.chip {
+  border: 0;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgba(0, 0, 0, .18);
+  backdrop-filter: blur(4px);
+}
+
+.concept-drawer {
+  position: fixed;
+  z-index: 30;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  width: min(480px, calc(100vw - 28px));
+  padding: 24px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--surface-solid) 94%, transparent);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .24);
+  transform: translateX(calc(100% + 30px));
+  transition: transform .25s ease;
+}
+
+.concept-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-actions {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+#drawerBack {
+  grid-column: 1;
+}
+
+#drawerDepth {
+  grid-column: 2;
+}
+
+#drawerClose {
+  grid-column: 3;
+}
+
+.drawer-icon {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .06);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.drawer-depth {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.drawer-concept h2 {
+  margin: 10px 0 8px;
+  font-size: 30px;
+}
+
+.drawer-concept > p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.drawer-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 24px 0;
+}
+
+.drawer-metric,
+.drawer-child {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, .04);
+}
+
+.drawer-metric span,
+.drawer-child p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.drawer-metric strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 18px;
+}
+
+.drawer-children {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.drawer-child {
+  width: 100%;
+  border: 1px solid transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drawer-child:hover {
+  border-color: rgba(0, 113, 227, .28);
+}
+
+.drawer-child strong {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawer-empty {
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, .04);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.manage-button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 15px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.manage-dialog {
+  width: min(620px, calc(100vw - 32px));
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .25);
+}
+
+.manage-dialog::backdrop {
+  background: rgba(0, 0, 0, .28);
+  backdrop-filter: blur(5px);
+}
+
+.manage-header,
+.manage-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.manage-header h2,
+.manage-action h3 {
+  margin: 0;
+}
+
+.manage-dialog > p,
+.manage-action p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.manage-confirmation {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .035);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.manage-confirmation:focus {
+  border-color: rgba(0, 113, 227, .45);
+}
+
+.manage-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.manage-action {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+}
+
+.manage-action button {
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: var(--text);
+  color: var(--surface-solid);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.manage-action button:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}
+
+.danger-zone button {
+  background: var(--red);
+  color: #fff;
+}
+
+.manage-error {
+  color: var(--red) !important;
+}
+
+@media (max-width: 760px) {
+  .manage-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

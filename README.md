@@ -1,92 +1,233 @@
 # AI Tutor
 
-AI Tutor V0.1 is a deterministic Python engine for a persistent learning loop:
+[简体中文](README.zh-CN.md) | English
 
-`Knowledge Graph -> Learning Graph <-> Mastery Graph`
+AI Tutor V0.1 is a local-first, goal-bounded learning engine. It combines an
+objective knowledge graph with per-learner mastery, prerequisite unlocking,
+adaptive roadmap generation, quizzes, misconceptions, learning sessions, and
+spaced review.
 
-The current milestones implement the shared concept graph, learner state,
-dependency unlocking, and explainable mastery evaluation. The project intentionally
-uses only the Python standard library and JSON-friendly models.
+The Python engine is deterministic and model-independent. Codex can orchestrate
+the included `ai-tutor` Skill for teaching and semantic assessment, but the CLI,
+dashboard, roadmap, and persisted learning state do not require Codex or any
+online model.
 
-## Run tests
+> V0.1 targets single-machine, single-user use. It stores data as local JSON and
+> does not require a database or a separate frontend service.
 
-```powershell
-python -m unittest discover -s tests -v
+## Highlights
+
+- Goal-bounded Subject Blueprint with a coarse domain landscape.
+- Engine-selected minimum viable learning graph (MVLG).
+- Dynamic roadmap based on prerequisites, goal relevance, and mastery.
+- Progressive, bounded expansion of a topic into teachable child concepts.
+- Hierarchical mastery aggregated from required child concepts.
+- Explainable next-concept selection and deterministic unlocking.
+- Diagnostic, learning, and review quizzes with structured evidence.
+- Misconception tracking and 1/3/7/14/30-day spaced review.
+- Persistent learning sessions, attempts, progress, and history.
+- Local Chinese dashboard with multi-Subject switching and recursive drill-down.
+- Confirmed progress reset and Subject deletion with recoverable archives.
+- Versioned, atomic JSON persistence with previous-version backups.
+
+## How it works
+
+```text
+Language model / human / CLI
+             |
+             v
+        TutorService
+      /      |       \
+Knowledge  Mastery  Curriculum
+  Graph     Graph      Planner
+      \      |       /
+       JsonRepository
+             |
+           data/
 ```
 
-## CLI quick start
+The dashboard frontend uses plain HTML, CSS, and JavaScript. The same Python
+process serves both static assets and JSON APIs, so the project is logically
+layered but not deployed as separate frontend and backend applications.
 
-```powershell
-python scripts/tutor_cli.py create machine_learning --name "Machine Learning"
-python scripts/tutor_cli.py next machine_learning
-python scripts/tutor_cli.py learn machine_learning
-python scripts/tutor_cli.py evaluate machine_learning --concept machine_learning `
-  --concept-quiz 0.9 --practice 0.8 --application 0.8 --transfer 0.7
-python scripts/tutor_cli.py status machine_learning
+## Requirements
+
+- Python 3.11 or newer
+- A modern browser for the dashboard
+- Codex only if you want to use the bundled Skill workflow
+
+Runtime code uses the Python standard library. Building or installing the package
+uses `setuptools`.
+
+## Installation
+
+### macOS / Linux
+
+```bash
+git clone <repository-url>
+cd AI-tutor
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
 ```
 
-After installation, the same commands are available through `ai-tutor`. Set
-`AI_TUTOR_DATA_DIR` to change the default data location, pass `--compact` for
-single-line JSON, or use `--input -` to read structured JSON from stdin.
-
-Every command emits structured JSON by default. Blueprint views can also be
-rendered as a Markdown Blueprint view with a Mermaid mind map, a core-backbone
-score table, a prerequisite graph, and collapsible advancement directions:
+### Windows PowerShell
 
 ```powershell
-python scripts/tutor_cli.py --format markdown blueprint machine_learning
-python scripts/tutor_cli.py --format markdown roadmap machine_learning
-python scripts/tutor_cli.py --format markdown directions machine_learning
+git clone <repository-url>
+Set-Location AI-tutor
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install .
 ```
 
-Data is atomically persisted under `data/`.
+For development, replace the last command with `python -m pip install -e .`.
 
-Detailed usage: [AI Tutor Skill 使用说明](docs/ai-tutor-skill-user-guide.md).
+Verify the installation:
 
-## Local dashboard
+```bash
+ai-tutor --version
+ai-tutor --help
+```
 
-Start the read-only local dashboard for a persisted Blueprint:
+## Quick start
 
-```powershell
+Create a local Subject and inspect its state:
+
+```bash
+ai-tutor create machine_learning --name "Machine Learning"
+ai-tutor status machine_learning
+ai-tutor graph machine_learning
+```
+
+Start the workspace dashboard:
+
+```bash
 ai-tutor dashboard
 ```
 
-The workspace discovers every persisted Subject and supports in-page switching.
-Use `ai-tutor dashboard machine-learning` for a direct Subject entry, or add
-`--port 9000`, `--host 127.0.0.1`, or `--no-open` when needed. The dashboard
-reads Blueprint, dynamic Roadmap, Mastery, recommendations, reviews, and history
-through `TutorService`; it never edits JSON files directly.
+By default it is available at <http://127.0.0.1:8765/>. Use
+`ai-tutor dashboard SUBJECT`, `--port`, `--host`, or `--no-open` when needed.
 
-## Current scope
+A newly created Subject contains only its root concept. Use the AI Tutor Skill or
+the structured CLI protocols to create its Blueprint, diagnostic, and detailed
+concept expansions.
 
-- Concept and relation models
-- Graph mutation and traversal
-- Prerequisite queries
-- Graph validation, including prerequisite-cycle detection
-- JSON-compatible serialization and restoration
-- Learner concept state and misconception tracking
-- Deterministic prerequisite thresholds and unlock decisions
-- Weighted mastery evaluation with separate score and confidence
-- Explainable mastery updates and weak-concept queries
-- Deterministic next-concept ranking with an explainable factor breakdown
-- Atomic JSON persistence for subjects and per-learner state
-- JSON CLI: `create`, `status`, `graph`, `next`, `learn`, `evaluate`, `review`,
-  `expand`, `quiz-register`, `quiz-submit`, `session-start`, `session-end`,
-  `history`, `progress`, `blueprint-create`, `blueprint`, `roadmap`, `directions`
-- Structured four-level quiz and LLM answer-assessment protocol
-- Persistent quiz attempts and misconception detection history
-- Connected, bounded, rollback-safe progressive graph expansion
-- Diagnostic/learning/review quiz purposes with a shared validated protocol
-- Explainable 1/3/7/14/30-day review scheduling
-- Codex Tutor Skill with progressively disclosed graph, pedagogy, mastery, and quiz rules
-- Persistent learning sessions with automatic action events
-- Progress analytics for mastery, confidence, attempts, retention, sessions, and reviews
-- Versioned JSON schemas with legacy migration and previous-version backup recovery
-- Installable `ai-tutor` console command and persisted-data `doctor` check
-- Goal-bounded Subject Blueprint with coarse landscape, algorithmic core backbone,
-  dynamic roadmap stages, and advancement directions
-- Goal-aware MVLG generation with configurable Core Score, recursive prerequisite
-  closure, DAG topological layers, dynamic graph-expansion refresh, mastery overlay,
-  and explainable inclusion reasons
+## Use with Codex
 
-The V0.1 core loop is now ready for its Machine Learning acceptance scenario.
+The repository contains a model-facing Skill in [`skill/ai-tutor`](skill/ai-tutor).
+Install that directory into your Codex skills directory, restart Codex, open this
+repository as the workspace, and start with a request such as:
+
+```text
+$ai-tutor I want to learn cloud computing from the beginning.
+My goal is to become a cloud application developer. I can study five hours a week.
+```
+
+The Skill uses the language model for explanations, examples, quiz generation,
+and rubric-based semantic assessment. It uses `TutorService` and the CLI as the
+source of truth for persisted state and deterministic decisions.
+
+See the [AI Tutor Skill user guide](docs/ai-tutor-skill-user-guide.md) for the
+full workflow.
+
+## Common CLI commands
+
+| Command | Purpose |
+| --- | --- |
+| `create` | Create a Subject root |
+| `blueprint-create` | Persist a goal, landscape, and roadmap configuration |
+| `blueprint` | Inspect the goal-bounded landscape and backbone |
+| `roadmap` | Recompute the personalized MVLG stages |
+| `directions` | Inspect optional advancement directions |
+| `expand` | Add one bounded batch below an anchor concept |
+| `status` / `progress` | Inspect learning state and analytics |
+| `next` / `learn` | Select or start the next teachable concept |
+| `quiz-register` / `quiz-submit` | Persist a quiz and assessed attempt |
+| `review` | List due reviews and remediation candidates |
+| `session-start` / `session-end` / `history` | Manage learning sessions |
+| `doctor` | Validate persisted data |
+| `reset-progress` | Reset one learner while preserving curriculum data |
+| `delete-subject` | Remove a Subject and all learner data |
+
+Commands return JSON by default. `blueprint`, `roadmap`, and `directions` support
+Markdown output when `--format markdown` is placed before the command:
+
+```bash
+ai-tutor --format markdown roadmap machine_learning
+```
+
+Global options such as `--learner`, `--data-dir`, and `--compact` must also appear
+before the command.
+
+## Data and privacy
+
+The default data directory is `./data`:
+
+```text
+data/
+├── subjects/       # objective knowledge graphs
+├── blueprints/     # goals, landscapes, and roadmap configuration
+├── learners/       # mastery, confidence, reviews, and misconceptions
+├── sessions/       # quizzes, attempts, and learning-session history
+└── archive/        # recoverable reset/delete archives
+```
+
+`data/` is ignored by Git because it may contain private learning goals, answers,
+history, and misconceptions. Do not publish that directory. Back it up if the
+learning state matters to you.
+
+Writes are atomic, existing files receive a `.bak` copy, and reset/delete actions
+move affected files into a timestamped archive before completing.
+
+More details: [Data and privacy](docs/data-and-privacy.md).
+
+## Reset and delete
+
+Both destructive commands require the exact Subject ID as confirmation:
+
+```bash
+ai-tutor reset-progress machine_learning --confirm machine_learning
+ai-tutor delete-subject machine_learning --confirm machine_learning
+```
+
+`reset-progress` affects only the selected learner. It preserves the Subject
+graph, Blueprint, and expanded topics. `delete-subject` removes the Subject,
+Blueprint, and every learner's associated resources from the active workspace.
+
+## Other language models
+
+The engine is not tied to Codex. DeepSeek, OpenAI API models, or other LLMs can
+generate lessons and structured payloads, but V0.1 does not include a provider API
+adapter. A replacement model must convert its output to the Blueprint, expansion,
+quiz, and assessment JSON accepted by `TutorService` or the CLI.
+
+See [Architecture and model integration](docs/architecture.md).
+
+## Development
+
+Run the complete test suite:
+
+```bash
+python -m unittest discover -v
+```
+
+The V0.1 suite covers graph validation, Blueprint generation, roadmap selection,
+mastery, quizzes, persistence, sessions, progressive expansion, hierarchy,
+dashboard APIs, reset, deletion, and recovery behavior.
+
+See [Contributing](CONTRIBUTING.md) and [smoke-test cases](docs/smoke-test-cases.md).
+
+## V0.1 limitations
+
+- Optimized for one machine and one primary user.
+- JSON persistence; no SQLite or server database.
+- No authentication or public-network hardening.
+- Frontend and backend are served by one local Python process.
+- No built-in DeepSeek/OpenAI/other provider client.
+- Semantic answer assessment still depends on a language model or human assessor.
+- No automatic archive-restore command yet.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

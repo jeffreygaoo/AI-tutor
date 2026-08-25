@@ -3,7 +3,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from scripts.tutor_cli import build_parser
 from tests.test_blueprint import blueprint_payload
@@ -48,13 +48,21 @@ class DashboardTests(unittest.TestCase):
             base = f"http://127.0.0.1:{server.server_port}"
             with urlopen(base + "/", timeout=3) as response:
                 html = response.read().decode("utf-8")
+            with urlopen(base + "/app.js", timeout=3) as response:
+                javascript = response.read().decode("utf-8")
             with urlopen(base + "/api/state", timeout=3) as response:
                 value = json.loads(response.read().decode("utf-8"))
             with urlopen(base + "/api/subjects", timeout=3) as response:
                 catalog = json.loads(response.read().decode("utf-8"))
             with urlopen(base + "/api/state?subject=python", timeout=3) as response:
                 pending = json.loads(response.read().decode("utf-8"))
-            self.assertIn("AI Tutor · Learning Dashboard", html)
+            self.assertIn("AI Tutor · 学习看板", html)
+            self.assertIn('id="conceptDrawer"', html)
+            self.assertIn('id="manageDialog"', html)
+            self.assertIn('data-concept=', javascript)
+            self.assertIn('data-drill=', javascript)
+            self.assertIn("reset-progress", javascript)
+            self.assertIn("delete-subject", javascript)
             self.assertEqual(value["subject"], "ml")
             self.assertEqual(value["blueprint"]["landscape"][0]["name"], "Orientation")
             self.assertEqual({item["id"] for item in catalog["subjects"]}, {"ml", "python"})
@@ -77,6 +85,63 @@ class DashboardTests(unittest.TestCase):
     def test_cli_allows_workspace_dashboard_without_subject(self) -> None:
         args = build_parser().parse_args(["dashboard", "--no-open"])
         self.assertIsNone(args.subject)
+
+    def test_http_api_resets_progress_and_deletes_subject(self) -> None:
+        server = create_server(self.data_dir, "ml", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+
+            def post(path: str, value: dict) -> dict:
+                request = Request(
+                    base + path,
+                    data=json.dumps(value).encode("utf-8"),
+                    method="POST",
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-AI-Tutor-Action": "true",
+                    },
+                )
+                with urlopen(request, timeout=3) as response:
+                    return json.loads(response.read().decode("utf-8"))
+
+            reset = post("/api/reset-progress", {
+                "subject": "ml", "confirmation": "ml",
+            })
+            self.assertEqual(reset["operation"], "reset-progress")
+            self.assertTrue(self.service.repository.subject_exists("ml"))
+
+            deleted = post("/api/delete-subject", {
+                "subject": "python", "confirmation": "python",
+            })
+            self.assertTrue(deleted["deleted"])
+            self.assertEqual(
+                {item["id"] for item in deleted["catalog"]["subjects"]},
+                {"ml"},
+            )
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
+    def test_localization_updates_display_text_without_changing_graph_ids(self) -> None:
+        before = self.service.graph_view("ml")
+        result = self.service.localize_subject("ml", {
+            "goal": "构建表格分类项目",
+            "concepts": {"problem_framing": {"name": "问题定义"}},
+            "sections": {"orientation": {"name": "学习导向"}},
+        })
+        after = self.service.graph_view("ml")
+        blueprint = self.service.blueprint_view("ml")
+        self.assertEqual(result["revision"], 2)
+        self.assertEqual(
+            {item["id"] for item in before["concepts"]},
+            {item["id"] for item in after["concepts"]},
+        )
+        self.assertEqual(blueprint["scope"]["goal"], "构建表格分类项目")
+        self.assertEqual(blueprint["landscape"][0]["name"], "学习导向")
+        self.assertEqual(blueprint["landscape"][0]["concepts"][0]["name"], "问题定义")
 
 
 if __name__ == "__main__":

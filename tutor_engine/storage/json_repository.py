@@ -7,8 +7,10 @@ import os
 import re
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
+from uuid import uuid4
 
 from tutor_engine.graph import ConceptGraph
 from tutor_engine.blueprint import SubjectBlueprint
@@ -163,6 +165,52 @@ class JsonRepository:
         attempts = [self._read(path, "attempt") for path in directory.glob("*.json")]
         return tuple(sorted(attempts, key=lambda item: (item.get("created_at", ""), item.get("id", ""))))
 
+    def reset_learner_progress(
+        self, subject_id: str, learner_id: str = "default"
+    ) -> dict[str, Any]:
+        """Archive one learner's state and all subject-scoped activity."""
+        self.load_graph(subject_id)
+        learner_path = self._learner_path(learner_id, subject_id)
+        session_path = self.sessions_dir / learner_id / subject_id
+        return self._archive_paths(
+            "reset-progress",
+            subject_id,
+            learner_id,
+            (
+                learner_path,
+                learner_path.with_suffix(learner_path.suffix + ".bak"),
+                session_path,
+            ),
+        )
+
+    def delete_subject(self, subject_id: str) -> dict[str, Any]:
+        """Archive a Subject and every learner-specific resource that belongs to it."""
+        self.load_graph(subject_id)
+        subject_path = self._subject_path(subject_id)
+        blueprint_path = self._blueprint_path(subject_id)
+        candidates = [
+            subject_path,
+            subject_path.with_suffix(subject_path.suffix + ".bak"),
+            blueprint_path,
+            blueprint_path.with_suffix(blueprint_path.suffix + ".bak"),
+        ]
+        if self.learners_dir.is_dir():
+            for learner_dir in self.learners_dir.iterdir():
+                if not learner_dir.is_dir():
+                    continue
+                learner_path = learner_dir / f"{subject_id}.json"
+                candidates.extend((
+                    learner_path,
+                    learner_path.with_suffix(learner_path.suffix + ".bak"),
+                ))
+        if self.sessions_dir.is_dir():
+            for learner_dir in self.sessions_dir.iterdir():
+                if learner_dir.is_dir():
+                    candidates.append(learner_dir / subject_id)
+        return self._archive_paths(
+            "delete-subject", subject_id, None, tuple(candidates)
+        )
+
     def _subject_path(self, subject_id: str) -> Path:
         self.validate_id(subject_id, "subject_id")
         return self.subjects_dir / f"{subject_id}.json"
@@ -184,6 +232,52 @@ class JsonRepository:
         self.validate_id(category, "category")
         self.validate_id(item_id, "item_id")
         return self.sessions_dir / learner_id / subject_id / category / f"{item_id}.json"
+
+    def _archive_paths(
+        self,
+        operation: str,
+        subject_id: str,
+        learner_id: str | None,
+        candidates: tuple[Path, ...],
+    ) -> dict[str, Any]:
+        existing = tuple(dict.fromkeys(path for path in candidates if path.exists()))
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        archive = self.data_dir / "archive" / (
+            f"{operation}_{subject_id}_{stamp}_{uuid4().hex[:8]}"
+        )
+        moved: list[tuple[Path, Path]] = []
+        file_count = sum(
+            1 if path.is_file() else sum(item.is_file() for item in path.rglob("*"))
+            for path in existing
+        )
+        try:
+            for source in existing:
+                relative = source.relative_to(self.data_dir)
+                destination = archive / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(destination))
+                moved.append((source, destination))
+            manifest = {
+                "operation": operation,
+                "subject": subject_id,
+                "learner": learner_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "files": [str(source.relative_to(self.data_dir)) for source, _ in moved],
+                "file_count": file_count,
+            }
+            self._atomic_write(archive / "manifest.json", manifest)
+        except (OSError, StorageError) as exc:
+            for source, destination in reversed(moved):
+                if destination.exists():
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(destination), str(source))
+            raise StorageError(
+                f"cannot archive resources for {operation}: {subject_id}"
+            ) from exc
+        return {
+            "archive": str(archive.relative_to(self.data_dir)),
+            "archived_files": file_count,
+        }
 
     def _read(self, path: Path, kind: str) -> Mapping[str, Any]:
         primary_error: Exception | None = None

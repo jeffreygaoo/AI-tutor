@@ -32,7 +32,7 @@ class CurriculumPlannerTests(unittest.TestCase):
         selection = CurriculumPlanner(graph, Learner("default")).next_concept()
         self.assertEqual(selection.concept, "probability")
         self.assertIsNotNone(selection.priority)
-        self.assertIn("prerequisite value", selection.reason)
+        self.assertIn("前置价值", selection.reason)
 
     def test_does_not_select_locked_or_mastered_concepts(self) -> None:
         graph = ConceptGraph(
@@ -55,7 +55,7 @@ class CurriculumPlannerTests(unittest.TestCase):
             selection.to_dict(),
             {
                 "concept": None,
-                "reason": "No unlocked, unmastered concept is currently available.",
+                "reason": "当前没有已解锁且尚未掌握的可学习知识点。",
                 "priority": None,
                 "factors": None,
             },
